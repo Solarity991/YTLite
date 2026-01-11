@@ -1,4 +1,5 @@
 #import "YTLite.h"
+#import <AVFoundation/AVFoundation.h>
 
 static UIImage *YTImageNamed(NSString *imageName) {
     return [UIImage imageNamed:imageName inBundle:[NSBundle mainBundle] compatibleWithTraitCollection:nil];
@@ -6,6 +7,36 @@ static UIImage *YTImageNamed(NSString *imageName) {
 
 // YouTube-X (https://github.com/PoomSmart/YouTube-X/)
 // Background Playback
+
+static void YTLiteKeepAliveSeek(AVPlayer *player) {
+    if (!player) return;
+
+    if (@available(iOS 26.0, *)) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC),
+                       dispatch_get_main_queue(), ^{
+            if (player.rate > 0) {
+                CMTime t = player.currentTime;
+                [player seekToTime:t
+                  toleranceBefore:kCMTimeZero
+                   toleranceAfter:kCMTimeZero];
+
+                // Repeat while playing
+                YTLiteKeepAliveSeek(player);
+            }
+        });
+    }
+}
+%hook YTPlayerViewController
+
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+
+    AVPlayer *player = [self valueForKey:@"_player"];
+    YTLiteKeepAliveSeek(player);
+}
+
+%end
+
 %hook YTIPlayabilityStatus
 - (BOOL)isPlayableInBackground { return ytlBool(@"backgroundPlayback") ? YES : NO; }
 %end
